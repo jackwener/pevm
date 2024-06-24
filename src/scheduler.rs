@@ -76,8 +76,7 @@ pub(crate) struct Scheduler {
     // For instance, for a transaction to depend on two lower others,
     // one send to the same recipient address, and one is from
     // the same sender.
-    // TODO: Build a fuller dependency graph.
-    transactions_dependencies: HashMap<TxIdx, Mutex<Vec<TxIdx>>, BuildIdentityHasher>,
+    transactions_dependencies_num: HashMap<TxIdx, AtomicUsize, BuildIdentityHasher>,
 }
 
 impl Scheduler {
@@ -98,9 +97,9 @@ impl Scheduler {
                 .into_iter()
                 .map(Mutex::new)
                 .collect(),
-            transactions_dependencies: transactions_dependencies
+            transactions_dependencies_num: transactions_dependencies
                 .into_iter()
-                .map(|(tx_idx, deps)| (tx_idx, Mutex::new(deps)))
+                .map(|(tx_idx, deps)| (tx_idx, AtomicUsize::new(deps.len())))
                 .collect(),
             // We won't validate until we find the first transaction that
             // reads or writes outside of its preprocessed dependencies.
@@ -226,12 +225,11 @@ impl Scheduler {
             let mut dependents = index_mutex!(self.transactions_dependents, tx_version.tx_idx);
             let mut min_dependent_idx = None;
             for tx_idx in dependents.iter() {
-                if let Some(deps) = self.transactions_dependencies.get(tx_idx) {
-                    let mut deps = deps.lock().unwrap();
-                    deps.retain(|dep_idx| dep_idx != &tx_version.tx_idx);
+                if let Some(dep_num) = self.transactions_dependencies_num.get(tx_idx) {
+                    let original_dep_num = dep_num.fetch_sub(1, Ordering::Release);
                     // Skip this dependent as it has other pending dependencies.
                     // Let the last one evoke it.
-                    if !deps.is_empty() {
+                    if original_dep_num > 1 {
                         continue;
                     }
                 }

@@ -103,7 +103,7 @@ fn run_test_unit(path: &Path, unit: &TestUnit) {
     unit.post.par_iter().for_each(|(spec_name, tests)| {
         // Constantinople was immediately extended by Petersburg.
         // There was technically never a Constantinople transaction on mainnet
-        // so REVM undestandably doesn't support it (without Petersburg).
+        // so REVM understandably doesn't support it (without Petersburg).
         if *spec_name == SpecName::Constantinople {
             return;
         }
